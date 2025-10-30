@@ -25,17 +25,21 @@ echo ""
 
 switch ($choice)
     case 1:
-        set db = "mariadb-server"
+        set db = "mariadb"
+        set pkg = "mariadb-server"
         breaksw
     case 2:
-        set db = "mysql-server"
+        set db = "mysql"
+        set pkg = "mysql-server"
         breaksw
     case 3:
         set db = "sqlite3"
+        set pkg = "sqlite3"
         breaksw
     default:
         echo "Invalid choice. Defaulting to MariaDB."
         set db = "mariadb"
+        set pkg = "mariadb-server"
 endsw
 
 echo "Database selected: $db"
@@ -44,15 +48,29 @@ echo ""
 # --- Step 2: Check if installed ---
 echo "Checking if $db is installed..."
 
-set installed = `which $db 2>/dev/null`
-if ("$installed" == "") then
-    echo "$db not found. Installing via apt..."
-    sudo apt update
-    sudo apt install -y $db || echo "Error: Unable to install $db"
+# Check if the binary exists in PATH
+which $db >& /dev/null
+if ($status == 0) then
+    echo "$db is already installed."
 else
-    echo "$db is already installed: $installed"
-endif
+    echo "$db not found. Installing via apt..."
+    #if ($?SUDO_USER || $USER == "root") then
+    if ($?SUDO_USER) then
+        set is_sudo = 1
+    else if ($USER == "root") then
+        set is_sudo = 1
+    else
+        set is_sudo = 0
+    endif
 
+    if ($is_sudo == 1) then
+        sudo apt-get update
+        sudo apt-get install -y $pkg
+    else
+        echo "This step requires sudo privileges."
+        exit 1
+    endif
+endif
 echo ""
 echo "Database setup check complete."
 echo ""

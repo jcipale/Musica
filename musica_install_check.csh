@@ -54,22 +54,10 @@ if ($status == 0) then
     echo "$db is already installed."
 else
     echo "$db not found. Installing via apt..."
-    #if ($?SUDO_USER || $USER == "root") then
-    if ($?SUDO_USER) then
-        set is_sudo = 1
-    else if ($USER == "root") then
-        set is_sudo = 1
-    else
-        set is_sudo = 0
-    endif
 
-    if ($is_sudo == 1) then
-        sudo apt-get update
-        sudo apt-get install -y $pkg
-    else
-        echo "This step requires sudo privileges."
-        exit 1
-    endif
+    sudo apt-get update
+    sudo apt-get install -y $pkg
+
 endif
 echo ""
 echo "Database setup check complete."
@@ -85,11 +73,6 @@ echo "Scanning mounted volumes (excluding local system partitions)..."
 set mountfile = "/tmp/musica_mounts.txt"
 rm -f $mountfile
 /bin/sh -c 'df -h --output=target,size,used,avail | grep "^/mnt/" | sort' >! $mountfile
-
-#if (! -s $mountfile) then
-#    echo "No mounts found under /mnt."
-#    exit 1
-#endif
 
 # ---------- show numbered list (print full line, do not re-parse fields) ----------
 
@@ -117,15 +100,30 @@ endif
 echo "Selected: $target"
 # (now use $target for creating directories etc.)
 
+echo "Creating Musica directory structure on $target ..."
+
 # ===========================================================
 #  Step 4: (Future)
 #  - Create Musica directory hierarchy
 #  - Copy/untar scripts
 #  - Configure database and environment
 # ===========================================================
-echo "Creating Musica directory structure on $target ..."
-sudo mkdir -p $target/Musica/{bin,etc,log,data,docs}
-sudo chown -R $USER:$USER $target/Musica
+# Define the Musica root directory
+set musica_root = "$target/Musica"
+
+# Create subdirectories explicitly (no brace expansion)
+sudo mkdir -p $musica_root
+foreach subdir (bin etc log data docs)
+    sudo mkdir -p "$musica_root/$subdir"
+end
+
+# Assign ownership to the current user
+sudo chown -R "${USER}:${USER}" "$musica_root"
+
+echo "Musica directory structure created successfully at: $musica_root"
+echo ""
+echo "Structure:"
+ls -l "$musica_root"
 
 echo "Musica directory tree created successfully."
 echo ""

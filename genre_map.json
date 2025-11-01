@@ -1,0 +1,20 @@
+{
+  "classical": "Classical",
+  "symphony": "Classical",
+  "opera": "Classical",
+  "ballet": "Classical",
+  "folk, world, & country": "Country",
+  "country": "Country",
+  "folk": "Country",
+  "americana": "Country",
+  "bluegrass": "Country",
+  "jazz": "Jazz",
+  "smooth jazz": "Jazz",
+  "fusion": "Jazz",
+  "bebop": "Jazz",
+  "rock": "Rock",
+  "progressive rock": "Rock",
+  "hard rock": "Rock",
+  "pop rock": "Rock"
+}
+

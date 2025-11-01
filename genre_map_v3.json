@@ -1,0 +1,16 @@
+{
+  "rock": { "genre": "Rock", "subtype": "General" },
+  "folk": { "genre": "Country", "subtype": "Folk" },
+  "world": { "genre": "Country", "subtype": "World" },
+  "country": { "genre": "Country", "subtype": "General" },
+  "jazz": { "genre": "Jazz", "subtype": "General" },
+  "new age": { "genre": "Jazz", "subtype": "New Age" },
+  "classical": { "genre": "Classical", "subtype": "Symphonic" },
+  "symphonic": { "genre": "Classical", "subtype": "Symphonic" },
+  "opera": { "genre": "Classical", "subtype": "Opera" },
+  "pop": { "genre": "Rock", "subtype": "Pop" },
+  "stage & screen": { "genre": "Soundtrack", "subtype": "Film" },
+  "electronic": { "genre": "Electronic", "subtype": "General" },
+  "unknown": { "genre": "Unknown", "subtype": "Unknown" }
+}
+

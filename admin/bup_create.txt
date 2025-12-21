@@ -1,0 +1,74 @@
+#!/bin/tcsh
+#
+# musica_db_create.csh
+# Creates the Musica database using the schema SQL file.
+
+# --- Load configuration ----------------------------------------------------
+if (! $?MUSICA_BASE_DIR) then
+    if (-f ./config/musica.conf) then
+        source ./config/musica.conf
+    else if (-f ../config/musica.conf) then
+        source ../config/musica.conf
+    else
+        echo "ERROR: musica.conf not found. Run: source config/musica.conf"
+        exit 1
+    endif
+endif
+
+# Verify environment
+$MUSICA_BIN_DIR/musica_verify_env.csh
+if ($status != 0) then
+    echo "ERROR: Environment verification failed."
+    exit 1
+endif
+
+echo "Musica Database Creation Utility"
+echo "----------------------------------------"
+echo "Database type:     $MUSICA_DB_TYPE"
+echo "Database name:     $MUSICA_DB_NAME"
+echo "Schema file:       $MUSICA_SQL_DIR/Create_Schema.sql"
+echo ""
+
+# --- Validate SQL file ----------------------------------------------------
+if (! -f $MUSICA_SQL_DIR/Create_Schema.sql) then
+    echo "ERROR: Schema file not found: $MUSICA_SQL_DIR/Create_Schema.sql"
+    exit 1
+endif
+
+# --- Start MariaDB/MySQL service ------------------------------------------
+if ($MUSICA_DB_TYPE == "mariadb" || $MUSICA_DB_TYPE == "mysql") then
+    set svc = mariadb
+
+    echo -n "Checking database service status... "
+    systemctl is-active --quiet $svc
+    if ($status != 0) then
+        echo "inactive"
+        echo "Attempting to start $svc service..."
+        sudo systemctl start $svc
+        if ($status != 0) then
+            echo "ERROR: Unable to start database service."
+            exit 1
+        endif
+    else
+        echo "active"
+    endif
+endif
+
+# --- Execute schema --------------------------------------------------------
+if ($MUSICA_DB_TYPE == "mariadb" || $MUSICA_DB_TYPE == "mysql") then
+    if ("$MUSICA_DB_PASS" == "") then
+        # unix_socket authentication
+        sudo mariadb < $MUSICA_SQL_DIR/Create_Schema.sql
+    else
+        mariadb -u $MUSICA_DB_USER -p$MUSICA_DB_PASS < $MUSICA_SQL_DIR/Create_Schema.sql
+    endif
+
+    if ($status != 0) then
+        logerror "ERROR: Schema creation failed."
+        exit 1
+    endif
+endif
+
+logprint "Database '$MUSICA_DB_NAME' created successfully."
+exit 0
+

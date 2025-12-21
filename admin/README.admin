@@ -1,1 +1,51 @@
+Musica Administrative Utilities
+===============================
+
+Purpose
+-------
+The admin/ directory contains low-level maintenance and administrative
+utilities for the Musica database environment. These tools are intended
+for system administrators or advanced users who need to perform direct
+maintenance or validation outside normal day-to-day operations.
+
+Contents
+--------
+cleanup.csh       - Performs deep cleanup of temporary, log, or residual
+                    files left by test or import/export operations.
+                    Use with care.
+
+backup_db.csh     - Creates a full backup of the current Musica database
+                    and stores it under ./data/archive/ with a timestamped
+                    filename.
+
+restore_db.csh    - Restores the database from a selected backup created
+                    by backup_db.csh.
+
+verify_env.csh    - Performs environment validation: checks for correct
+                    directory structure, permissions, config file presence,
+                    and database service availability.
+
+Usage Notes
+-----------
+- These scripts should NOT be used in routine operation or by casual users.
+- All scripts assume the configuration file config/musica.conf is properly
+  defined and readable.
+- Run scripts from within their directory, or ensure $PATH includes the
+  admin/ directory.
+- Most actions require elevated privileges (sudo), particularly those
+  involving database service control or data restoration.
+
+Examples
+--------
+  cd /opt/musica/admin
+  sudo ./verify_env.csh
+  sudo ./backup_db.csh
+  sudo ./cleanup.csh
+
+Safety Warning
+--------------
+- Do NOT modify or remove data directly from the database or data/ tree
+  without a verified backup.
+- cleanup.csh and restore_db.csh can cause irreversible data loss if misused.
+- Always test changes in a non-production environment first.
 

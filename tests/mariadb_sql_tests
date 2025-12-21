@@ -1,1 +1,11 @@
+sudo mariadb
+MariaDB [(none)]>
+SHOW DATABASES;
+DROP DATABASE Musica;
+Query OK, 0 rows affected
+
+
+sudo mariadb -e "DROP DATABASE Musica;"
+
+sudo mariadb -e "SHOW DATABASES LIKE 'Musica';"
 

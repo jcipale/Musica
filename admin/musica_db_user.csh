@@ -40,6 +40,11 @@ if ($status != 0) then
     exit 1
 endif
 
+if ($status != 0) then
+    logerror "Failed to query database catalog"
+    exit 1
+endif
+
 set db_check = `cat /tmp/musica_db_exists.$$`
 rm -f /tmp/musica_db_exists.$$
 
@@ -63,6 +68,7 @@ else
     "CREATE USER IF NOT EXISTS '$MUSICA_DB_USER'@'$MUSICA_DB_HOST' IDENTIFIED BY '$MUSICA_DB_PASS';"
 endif
 
+
 if ($status != 0) then
     logerror "Failed to create or verify user '$MUSICA_DB_USER'"
     exit 1
@@ -75,14 +81,9 @@ logprint "User exists."
 # ------------------------------------------------------------
 logprint "Applying grants..."
 
-sudo mariadb -e "
-GRANT
-    SELECT, INSERT, UPDATE, DELETE,
-    CREATE, DROP, INDEX, ALTER
-ON ${MUSICA_DB_NAME}.*
-TO '$MUSICA_DB_USER'@'$MUSICA_DB_HOST';
-FLUSH PRIVILEGES;
-"
+sudo mariadb -e "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON ${MUSICA_DB_NAME}.* TO '$MUSICA_DB_USER'@'$MUSICA_DB_HOST';"
+
+sudo mariadb -e "FLUSH PRIVILEGES; "
 
 if ($status != 0) then
     logerror "Failed to apply grants"
@@ -110,5 +111,5 @@ endif
 logprint "User authentication verified."
 
 logprint "Phase 3C complete. Database user ready."
-exit 0
 
+exit 0

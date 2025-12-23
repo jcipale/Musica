@@ -101,7 +101,7 @@ if ($MUSICA_DB_TYPE == "mariadb" || $MUSICA_DB_TYPE == "mysql") then
 
     if ("$MUSICA_DB_PASS" == "") then
         # unix_socket authentication (admin context)
-        sudo mariadb $MUSICA_DB_NAME < $MUSICA_SQL_DIR/Create_Schema.sql
+        sudo mariadb --batch --silent $MUSICA_DB_NAME < $MUSICA_SQL_DIR/Create_Schema.sql
     else
         mariadb -u $MUSICA_DB_USER -p$MUSICA_DB_PASS $MUSICA_DB_NAME < $MUSICA_SQL_DIR/Create_Schema.sql
     endif

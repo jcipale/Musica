@@ -24,8 +24,21 @@ import sys
 import json
 import requests
 from time import sleep
+from pathlib import Path
 from datetime import datetime
 import re
+
+
+# tools/Musica.py
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parent
+
+EXPORT_DIR = PROJECT_ROOT / "data" / "exports"
+EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+date_str = datetime.now().strftime("%m.%d.%Y")
+
+out_name = EXPORT_DIR / f"Musica_Export_{date_str}.csv"
 
 # -------------------------
 # Progress bar
@@ -433,10 +446,10 @@ def main():
         sys.exit(1)
 
     releases = fetch_discogs_collection(username, token)
-    date_str = datetime.now().strftime("%m.%d.%Y")
-    out_name = f"Musica_Export_{date_str}.csv"
+    #date_str = datetime.now().strftime("%m.%d.%Y")
+    #out_name = f"Musica_Export_{date_str}.csv"
 
-    headers = ["Artist","Title","Composer","Orchestra","Conductor","Year","Genre","Format","Label","Catalog_Number","Recording_Mode","Reissue","DBX_Encoded"]
+    headers = ["Artist","Title","Year","Composer","Orchestra","Conductor","Genre","Format","Label","Catalog_Number","Recording_Mode","Reissue","DBX_Encoded"]
 
     with open(out_name, "w", encoding="utf-8") as out:
         out.write(";".join(headers) + "\n")
@@ -449,6 +462,9 @@ def main():
 
             # Title
             title = normalize_title(info.get("title","") or "")
+
+            # Year
+            year = str(info.get("year") or "")
 
             # Composer (CE3: only explicit)
             composer = extract_composer(info)
@@ -463,9 +479,6 @@ def main():
             artist_for_row = artist_field
             if genre in ("classical","soundtrack") and conductor:
                 artist_for_row = conductor
-
-            # Year
-            year = str(info.get("year") or "")
 
             # Format
             formats = info.get("formats", []) or []
@@ -493,8 +506,8 @@ def main():
             dbx = detect_dbx(formats, info.get("notes","") or "")
 
             row = [
-                artist_for_row or "", title or "", composer or "", orchestra or "", conductor or "",
-                year or "", genre or "", fmt or "", label or "", catalog or "", recording_mode or "", reissue or "", dbx or ""
+                artist_for_row or "", title or "", year or "", composer or "", orchestra or "", conductor or "",
+                genre or "", fmt or "", label or "", catalog or "", recording_mode or "", reissue or "", dbx or ""
             ]
             safe_row = [str(x).replace("\n"," ").replace("\r"," ") for x in row]
             out.write(";".join(safe_row) + "\n")

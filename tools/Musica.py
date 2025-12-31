@@ -190,10 +190,13 @@ def normalize_format(fmt_list):
         return ""
     text = " ".join(fmt_list).lower()
     if "vinyl" in text: return "LP"
+    if "78 RPM" in text or "8 track" in text: return "78"
+    if "45 RPM" in text or "8 track" in text: return "45"
     if "cd" in text and "cd-rom" not in text: return "CD"
     if "cassette" in text: return "Cass"
     if "reel" in text: return "RtR"
-    if "8-track" in text or "8 track" in text: return "8T"
+    if "8-Track Cartridge" in text or "8 track" in text: return "8T"
+    if "4-Track Cartridge" in text or "8 track" in text: return "4T"
     return " ".join(fmt_list)
 
 def detect_recording_mode(formats):

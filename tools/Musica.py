@@ -38,7 +38,7 @@ EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 date_str = datetime.now().strftime("%m.%d.%Y")
 
-out_name = EXPORT_DIR / f"Musica_Export_{date_str}.csv"
+out_name = EXPORT_DIR / f"Musica_Import_{date_str}.csv"
 
 # -------------------------
 # Progress bar

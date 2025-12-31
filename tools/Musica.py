@@ -33,7 +33,7 @@ import re
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 
-EXPORT_DIR = PROJECT_ROOT / "data" / "exports"
+EXPORT_DIR = PROJECT_ROOT / "data" / "imports"
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 date_str = datetime.now().strftime("%m.%d.%Y")

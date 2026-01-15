@@ -26,8 +26,8 @@ CREATE TABLE recordings (
     CONSTRAINT uq_artist_title_year
         UNIQUE (artist, title, year),
 
-    CONSTRAINT chk_year_valid
-        CHECK (year BETWEEN 1900 AND YEAR(CURDATE()) + 1),
+    CONSTRAINT chk_year_lower_bound
+        CHECK (year >= 1900),
 
     CONSTRAINT chk_genre
         CHECK (genre IN ('Jazz','Rock','Country','Symphonic')),
@@ -35,13 +35,37 @@ CREATE TABLE recordings (
     CONSTRAINT chk_format
         CHECK (format IN ('LP','CD','Cass','RtR')),
 
-    CONSTRAINT chk_recording_mode
+	CONSTRAINT chk_recording_mode
         CHECK (recording_mode IN ('M','S') OR recording_mode IS NULL),
 
-    CONSTRAINT chk_reissue
-        CHECK (reissue IN ('Y','N') OR reissue IS NULL),
-
     CONSTRAINT chk_dbx
-        CHECK (dbx_encoded = 'Y' OR dbx_encoded IS NULL)
+        CHECK (dbx_encoded = 'Y' OR dbx_encoded IS NULL),
+
+    CONSTRAINT chk_reissue
+        CHECK (reissue IN ('Y','N') OR reissue IS NULL)
 );
+
+DELIMITER //
+
+CREATE TRIGGER trg_recordings_year_ins
+BEFORE INSERT ON recordings
+FOR EACH ROW
+BEGIN
+    IF NEW.year > YEAR(CURDATE()) + 1 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Invalid year: exceeds allowed range';
+    END IF;
+END//
+
+CREATE TRIGGER trg_recordings_year_upd
+BEFORE UPDATE ON recordings
+FOR EACH ROW
+BEGIN
+    IF NEW.year > YEAR(CURDATE()) + 1 THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Invalid year: exceeds allowed range';
+    END IF;
+END//
+
+DELIMITER ;
 

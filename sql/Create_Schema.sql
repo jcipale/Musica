@@ -1,7 +1,7 @@
 -- Create_Schema.sql
 -- Phase 2 schema — MariaDB 10.5+ enforced
 
-USE Musica;
+-- USE Musica; (<-- removed for debug/defect tracking purposes)
 
 CREATE TABLE recordings (
     id                INT AUTO_INCREMENT PRIMARY KEY,

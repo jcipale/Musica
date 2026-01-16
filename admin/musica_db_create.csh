@@ -41,6 +41,28 @@ alias logprint 'echo "\!*" |& tee -a "$log_file"'
 alias logerror 'echo "ERROR: \!*" |& tee -a "$log_file"'
 
 # ----------------------------
+# Parse CLI arguments
+# ----------------------------
+set i = 1
+while ($i <= $#argv)
+    switch ($argv[$i])
+        case -db:
+            @ i++
+            if ($i <= $#argv) then
+                setenv MUSICA_DB_NAME "$argv[$i]"
+            else
+                logerror "-db requires a database name"
+                exit 1
+            endif
+            breaksw
+        default:
+            # ignore unknown options for now
+            breaksw
+    endsw
+    @ i++
+end
+
+# ----------------------------
 # STEP 1 — Database setup check
 # ----------------------------
 
@@ -96,10 +118,30 @@ endif
 # STEP 2 — Execute schema 
 # ----------------------------
 
+#if ($MUSICA_DB_TYPE == "mariadb" || $MUSICA_DB_TYPE == "mysql") then
+#    logprint "Loading schema into database '$MUSICA_DB_NAME'..."
+#
+#    if ("$MUSICA_DB_PASS" == "") then
+#        # unix_socket authentication (admin context)
+#        sudo mariadb --batch --silent $MUSICA_DB_NAME < $MUSICA_SQL_DIR/Create_Schema.sql
+#    else
+#        mariadb -u $MUSICA_DB_USER -p$MUSICA_DB_PASS $MUSICA_DB_NAME < $MUSICA_SQL_DIR/Create_Schema.sql
+#    endif
+#
+#    if ($status != 0) then
+#        logerror "ERROR: Schema creation failed."
+#        exit 1
+#    endif
+#endif
+
+# ----------------------------
+# STEP 2 — Execute schema
+# ----------------------------
+
 if ($MUSICA_DB_TYPE == "mariadb" || $MUSICA_DB_TYPE == "mysql") then
     logprint "Loading schema into database '$MUSICA_DB_NAME'..."
 
-    if ("$MUSICA_DB_PASS" == "") then
+    if (! $?MUSICA_DB_PASS) then
         # unix_socket authentication (admin context)
         sudo mariadb --batch --silent $MUSICA_DB_NAME < $MUSICA_SQL_DIR/Create_Schema.sql
     else

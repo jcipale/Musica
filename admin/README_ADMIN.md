@@ -14,13 +14,29 @@ They are **not part of normal runtime operation**.
 
 The `admin/` directory exists to clearly separate:
 
-- **Database creation & structure**
-- **Security configuration**
-- **One-time initialization**
+- **Database creation & structural changes**
+- **Security and privilege management**
+- **One-time or destructive initialization tasks**
 
 from application and user-level SQL found in `../sql/`.
 
 This separation is intentional and enforced.
+
+---
+## Administrative Utilities Overview
+
+The following scripts are maintained in this directory. All are
+administrator-only and may perform destructive operations.
+
+| Script | Purpose |
+|------|--------|
+| musica_db_cleanup.py | Performs destructive cleanup of database artifacts and residual files. |
+| musica_db_backup.py | Creates a full database backup stored under data/archive with a timestamp. |
+| musica_db_restore.py | Restores a database from a previously created backup. |
+| musica_verify_env.py | Validates directory structure, permissions, configuration, and database availability. |
+
+All scripts assume a correctly configured `config/musica.conf` and
+may require elevated privileges.
 
 ---
 
@@ -76,6 +92,8 @@ If running manually, the correct order is:
 
 The `musica_db_init.py` script automates all of the above.
 
+Manual execution of individual SQL files is supported for debugging or recovery, but the Python initializer is the authoritative path for new deployments.
+
 ---
 
 ## Security Model
@@ -93,6 +111,11 @@ This is by design.
 - These scripts are **database-specific**
 - Running them on one database does **not** affect others
 - Re-running them may fail if objects already exist
+
+## Expected Failure Modes
+- Some operations in this directory are intentionally non-idempotent.
+- Errors such as “object already exists” or “user already present” are signals, not bugs.
+- These utilities favor explicit failure over silent mutation, in keeping with QA and audit best practices.
 
 This is expected behavior.
 

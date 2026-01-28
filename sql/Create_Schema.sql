@@ -33,7 +33,7 @@ CREATE TABLE recordings (
         CHECK (genre IN ('Jazz','Rock','Country','Symphonic')),
 
     CONSTRAINT chk_format
-        CHECK (format IN ('LP','CD','Cass','RtR')),
+        CHECK (format IN ('LP','CD','Cass','RtR', '78', '4T', '8T')),
 
 	CONSTRAINT chk_recording_mode
         CHECK (recording_mode IN ('M','S') OR recording_mode IS NULL),

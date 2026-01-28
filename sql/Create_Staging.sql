@@ -1,4 +1,3 @@
-USE Musica;
 
 CREATE TABLE stg_recordings (
     -- =========================

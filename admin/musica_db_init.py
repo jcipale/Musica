@@ -3,16 +3,59 @@
 import mariadb
 import getpass
 import sys
+import os
 from datetime import datetime
+
+# -------------------------
+# Configuration
+# -------------------------
+
+CONFIG_FILE = "/opt/Musica/config/musica.conf"
 
 ADMIN_SQL = [
     "/opt/Musica/admin/Create_Staging.sql",
     "/opt/Musica/admin/v_recordings_display.sql"
 ]
 
+REQUIRED_CONFIG_VARS = [
+    "MUSICA_HOME",
+    "DB_HOST"
+]
+
+# -------------------------
+# Utility functions
+# -------------------------
+
 def fail(msg):
     print(f"\nERROR: {msg}")
     sys.exit(1)
+
+def load_config(path):
+    """
+    Load shell-style KEY=VALUE pairs from musica.conf
+    """
+    if not os.path.isfile(path):
+        fail(f"Configuration file not found: {path}")
+
+    config = {}
+
+    with open(path, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+
+            if "=" not in line:
+                fail(f"Invalid config line: {line}")
+
+            key, val = line.split("=", 1)
+            config[key.strip()] = val.strip()
+
+    for key in REQUIRED_CONFIG_VARS:
+        if key not in config or not config[key]:
+            fail(f"Required config variable missing: {key}")
+
+    return config
 
 def prompt(label, required=True):
     val = input(label).strip()
@@ -20,12 +63,12 @@ def prompt(label, required=True):
         fail("Required input missing.")
     return val
 
-def connect_admin(user, password):
+def connect_admin(user, password, host):
     try:
         return mariadb.connect(
             user=user,
             password=password,
-            host="localhost",
+            host=host,
             autocommit=True
         )
     except mariadb.Error as e:
@@ -41,9 +84,22 @@ def run_sql_file(cursor, path):
     except mariadb.Error as e:
         fail(f"Failed executing {path}: {e}")
 
+# -------------------------
+# Main
+# -------------------------
+
 def main():
     print("\nMusica Database Initialization")
     print("------------------------------")
+
+    # Load configuration
+    config = load_config(CONFIG_FILE)
+    musica_home = config["MUSICA_HOME"]
+    db_host = config["DB_HOST"]
+
+    print(f"Using configuration from: {CONFIG_FILE}")
+    print(f"MUSICA_HOME = {musica_home}")
+    print(f"DB_HOST     = {db_host}")
 
     admin_user = prompt("Admin DB user: ")
     admin_pass = getpass.getpass("Admin password: ")
@@ -58,7 +114,7 @@ def main():
 
     role = prompt("Choice [1/2]: ")
 
-    conn = connect_admin(admin_user, admin_pass)
+    conn = connect_admin(admin_user, admin_pass, db_host)
     cur = conn.cursor()
 
     # Create database

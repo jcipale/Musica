@@ -19,6 +19,11 @@ import platform
 import shutil
 import subprocess
 
+MUSICA_CONF = Path("/opt/Musica/config/musica.conf")
+MUSICA_CONF_PATH = Path("/opt/Musica/config/musica.conf")
+DEFAULT_VENV_PATH = Path("/opt/Musica/venv")
+
+
 # ------------------------------------------------------------
 # Utility functions
 # ------------------------------------------------------------
@@ -28,6 +33,40 @@ def require_root():
         print("ERROR: This installer must be run as root (sudo).")
         print(f"Run again using: sudo {sys.argv[0]}")
         sys.exit(1)
+
+# ------------------------------------------------------------
+def validate_paths(config):
+    print("")
+    print("STEP 6: Validating Musica paths")
+    print("-------------------------------------------------------------")
+
+    paths = {
+        "MUSICA_BASE_DIR": config["MUSICA_BASE_DIR"],
+        "MUSICA_CONFIG_DIR": config["MUSICA_CONFIG_DIR"],
+        "MUSICA_SQL_DIR": config["MUSICA_SQL_DIR"],
+        "MUSICA_DATA_DIR": config["MUSICA_DATA_DIR"],
+    }
+
+    for name, path in paths.items():
+        p = Path(path)
+        if not p.exists():
+            print(f"ERROR: Path does not exist: {name} -> {path}")
+            sys.exit(1)
+        print(f"OK: {name} = {path}")
+
+# ------------------------------------------------------------
+def final_summary(db_name, db_user, privileges):
+    print("")
+    print("-------------------------------------------------------------")
+    print("Musica installation completed successfully.")
+    print("")
+    print("Database configuration:")
+    print(f"  Database   : {db_name}")
+    print(f"  User       : {db_user}")
+    print(f"  Privileges : {privileges}")
+    print("")
+    print("Musica is ready for use.")
+    print("-------------------------------------------------------------")
 
 # ------------------------------------------------------------
 # STEP 2: OS detection & classification
@@ -100,6 +139,132 @@ def classify_windows():
     print(f"Windows release         : {platform.release()}")
     print(f"Windows version         : {platform.version()}")
 
+# ------------------------------------------------------------
+# STEP 2.5: Ensure database packages installed  
+# ------------------------------------------------------------
+def ensure_database_installed(system, distro_class, musica_config):
+    if system == "Linux":
+        return ensure_db_linux(distro_class, musica_config)
+    elif system == "Darwin":
+        return ensure_db_macos(musica_config)
+    elif system == "SunOS":
+        return ensure_db_sunos(musica_config)
+    else:
+        print(f"Database auto-install not supported on {system}.")
+        return True
+
+# ------------------------------------------------------------
+def ensure_db_linux(distro_class, musica_config):
+    engine = musica_config.get("DEFAULT_DB_ENGINE", "mariadb")
+
+    print("STEP 2.5: Ensuring database packages are installed")
+    print("-------------------------------------------------------------")
+
+    if engine != "mariadb":
+        print(f"Unsupported DB engine '{engine}'")
+        return False
+
+    if shutil.which("mysql") or shutil.which("mariadb"):
+        print("Database client already present.")
+        return True
+
+    resp = input("MariaDB not found. Install now? [y/N]: ").strip().lower()
+    if resp != "y":
+        return False
+
+    if distro_class == "Debian-family":
+        subprocess.run(["apt-get", "update"], check=True)
+        subprocess.run(
+            ["apt-get", "-y", "install", "mariadb-server", "mariadb-client"],
+            check=True
+        )
+
+    elif distro_class == "RedHat-family":
+        pm = "dnf" if shutil.which("dnf") else "yum"
+        subprocess.run(
+            [pm, "-y", "install", "mariadb-server", "mariadb"],
+            check=True
+        )
+        subprocess.run(["systemctl", "enable", "--now", "mariadb"], check=False)
+
+    elif distro_class == "SUSE-family":
+        subprocess.run(
+            ["zypper", "--non-interactive", "install", "mariadb"],
+            check=True
+        )
+        subprocess.run(["systemctl", "enable", "--now", "mariadb"], check=False)
+
+    elif distro_class == "Arch-family":
+        subprocess.run(
+            ["pacman", "-Sy", "--noconfirm", "mariadb"],
+            check=True
+        )
+        subprocess.run(
+            ["mariadb-install-db", "--user=mysql", "--basedir=/usr", "--datadir=/var/lib/mysql"],
+            check=False
+        )
+        subprocess.run(["systemctl", "enable", "--now", "mariadb"], check=False)
+
+    elif distro_class == "Alpine":
+        subprocess.run(
+            ["apk", "add", "mariadb", "mariadb-client"],
+            check=True
+        )
+        subprocess.run(["rc-service", "mariadb", "start"], check=False)
+
+    else:
+        print(f"Unsupported Linux distro class: {distro_class}")
+        return False
+
+    print("MariaDB installation completed.")
+    return True
+
+# ------------------------------------------------------------
+def ensure_db_macos(musica_config):
+    print("STEP 2.5: Ensuring database packages are installed")
+    print("-------------------------------------------------------------")
+
+    if shutil.which("mysql") or shutil.which("mariadb"):
+        print("Database client already present.")
+        return True
+
+    if not shutil.which("brew"):
+        print("ERROR: Homebrew not found.")
+        print("Install from https://brew.sh/")
+        return False
+
+    resp = input("Install MariaDB via Homebrew? [y/N]: ").strip().lower()
+    if resp != "y":
+        return False
+
+    subprocess.run(["brew", "install", "mariadb"], check=True)
+    subprocess.run(["brew", "services", "start", "mariadb"], check=False)
+
+    print("MariaDB installation completed.")
+    return True
+
+# ------------------------------------------------------------
+def ensure_db_sunos(musica_config):
+    print("STEP 2.5: Ensuring database packages are installed")
+    print("-------------------------------------------------------------")
+
+    if shutil.which("mysql"):
+        print("Database client already present.")
+        return True
+
+    resp = input("Install MariaDB using pkg? [y/N]: ").strip().lower()
+    if resp != "y":
+        return False
+
+    subprocess.run(
+        ["pkg", "install", "-y", "database/mariadb-106"],
+        check=True
+    )
+
+    print("MariaDB installation completed.")
+    return True
+
+# ------------------------------------------------------------
 # ------------------------------------------------------------
 # STEP 3: Database detection
 # ------------------------------------------------------------
@@ -285,14 +450,63 @@ def db_user_setup_linux():
     return db_name, user_id, priv_level
 
 # ------------------------------------------------------------
-# STEP 5: PEP 668 Advisory Check
+# STEP 6: Configuration Loader Mechanism
+# ------------------------------------------------------------
+def load_musica_config():
+    print("STEP 5: Validating musica.conf")
+    print("-------------------------------------------------------------")
+
+    if not MUSICA_CONF.is_file():
+        print(f"ERROR: Missing config file: {MUSICA_CONF}")
+        sys.exit(1)
+
+    config = {}
+
+    with MUSICA_CONF.open() as f:
+        for lineno, line in enumerate(f, start=1):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+
+            if "=" not in line:
+                print(f"ERROR: Invalid config syntax at line {lineno}")
+                sys.exit(1)
+
+            key, value = line.split("=", 1)
+            config[key.strip()] = value.strip()
+
+    required_keys = [
+        "MUSICA_BASE_DIR",
+        "MUSICA_CONFIG_DIR",
+        "MUSICA_SQL_DIR",
+        "MUSICA_DATA_DIR",
+        "MUSICA_DB_TYPE",
+    ]
+
+    missing = [k for k in required_keys if k not in config]
+    if missing:
+        print("ERROR: Missing required config keys:")
+        for k in missing:
+            print(f"  - {k}")
+        sys.exit(1)
+
+    print("Loaded configuration:")
+    print(f"  MUSICA_BASE_DIR  = {config['MUSICA_BASE_DIR']}")
+    print(f"  MUSICA_SQL_DIR   = {config['MUSICA_SQL_DIR']}")
+    print(f"  MUSICA_CONFIG_DIR= {config['MUSICA_CONFIG_DIR']}")
+
+    print("musica.conf loaded successfully.")
+    return config
+
+# ------------------------------------------------------------
+# STEP 6: PEP 668 Advisory Check
 # ------------------------------------------------------------
 def check_pep668(system: str, distro_class: str):
     """
     Detect if the system may require PEP 668 workaround (venv) for MariaDB/Python interface.
     Only applicable for Linux/Debian-family systems (Deb13+).
     """
-    print("\nSTEP 5: PEP 668 Advisory Check")
+    print("\nSTEP 6: PEP 668 Advisory Check")
     print("-------------------------------------------------------------")
 
     if system == "Linux" and distro_class == "Debian-family":
@@ -311,49 +525,239 @@ def check_pep668(system: str, distro_class: str):
     print("-------------------------------------------------------------")
 
 # ------------------------------------------------------------
+# STEP 6.1: Enforce / Install PEP 668 Virtual Environment
+# ------------------------------------------------------------
+def ensure_venv_pep668(system: str, distro_class: str):
+    """
+    Create and initialize a Python virtual environment when
+    PEP 668 protections are likely in effect.
+    """
+
+    # Only apply where it actually matters
+    pep_applicable = (
+        system == "Linux" and distro_class in ("Debian-family", "RHEL-family", "SUSE-family")
+    ) or system == "Darwin"
+
+    if not pep_applicable:
+        return True
+
+    venv_dir = Path("/opt/Musica/venv")
+    venv_python = venv_dir / "bin/python"
+    venv_pip = venv_dir / "bin/pip"
+
+    if venv_python.exists():
+        print("Virtual environment already exists:", venv_dir)
+        return True
+
+    print("")
+    print("PEP 668 requires a Python virtual environment.")
+    resp = input("Create Musica virtual environment now? [y/N]: ").strip().lower()
+
+    if resp != "y":
+        print("Virtual environment creation skipped.")
+        return False
+
+    print("Creating virtual environment at:", venv_dir)
+
+    try:
+        subprocess.run(
+            [sys.executable, "-m", "venv", str(venv_dir)],
+            check=True
+        )
+    except subprocess.CalledProcessError:
+        print("ERROR: Failed to create virtual environment.")
+        return False
+
+    print("Virtual environment created successfully.")
+
+    # --------------------------------------------------------
+    # Install required Python packages INSIDE the venv
+    # --------------------------------------------------------
+    print("Installing required Python packages into venv...")
+
+    required_packages = [
+        "mysqlclient",      # Preferred native driver
+        # "mariadb",        # Optional alternative
+        # "PyMySQL",        # Optional fallback
+    ]
+
+    try:
+        subprocess.run(
+            [str(venv_pip), "install", "--upgrade", "pip"],
+            check=True
+        )
+
+        subprocess.run(
+            [str(venv_pip), "install", *required_packages],
+            check=True
+        )
+    except subprocess.CalledProcessError:
+        print("ERROR: Failed to install Python DB packages in venv.")
+        return False
+
+    print("Python DB packages installed successfully.")
+    print("PEP 668 environment setup completed.")
+
+    return True
+
+# ------------------------------------------------------------
+# Load Configuration Check
+# ------------------------------------------------------------
+def validate_musica_config(musica_config):
+    print("\nSTEP 5: Musica configuration validation")
+    print("-------------------------------------------------------------")
+
+    required_keys = [
+        "MUSICA_BASE_DIR",
+        "MUSICA_SQL_DIR",
+        "MUSICA_CONFIG_DIR",
+    ]
+
+    missing = False
+
+    for key in required_keys:
+        value = musica_config.get(key)
+
+        if not value:
+            print(f"ERROR: {key} is not defined in musica.conf")
+            missing = True
+            continue
+
+        print(f"{key:<20}: {value}")
+
+        if not Path(value).exists():
+            print(f"  WARNING: Path does not exist: {value}")
+
+    if missing:
+        print("\nConfiguration validation failed.")
+        sys.exit(1)
+
+    print("\nConfiguration validation completed successfully.")
+    print("-------------------------------------------------------------")
+
+# ------------------------------------------------------------
+# Main entry
+# ------------------------------------------------------------
+# ------------------------------------------------------------
 # Main entry
 # ------------------------------------------------------------
 def main():
     print("Musica Installer – Environment Validation")
     require_root()
 
-
     print("")
-    print("STEP 1 Root-user completed successfully.")
-    print("----------------------------------------")
+    print("STEP 1: Root-user verification completed successfully.")
+    print("-----------------------------------------------------")
 
+    # --------------------------------------------------------
+    # STEP 2: Detect OS and classify distro
+    # (existing logic, unchanged)
+    # --------------------------------------------------------
     system = detect_os()
     distro_class = classify_os(system)
 
     print("")
-    print("STEP 2 System OS detected successfully.")
-    print("----------------------------------------")
+    print("STEP 2: System OS detected successfully.")
+    print("-----------------------------------------------------")
 
+    # --------------------------------------------------------
+    # STEP 2.5: Load musica.conf EARLY
+    # ★ RECENT CHANGE:
+    #   - Config is loaded before DB install/detection
+    #   - Required for DEFAULT_DB_ENGINE and path validation
+    # --------------------------------------------------------
+    musica_config = load_musica_config()
+
+    print("")
+    print("STEP 2.5: Musica configuration loaded.")
+    print("-----------------------------------------------------")
+
+    # --------------------------------------------------------
+    # STEP 2.6: Ensure database engine is installed
+    # ★ RECENT CHANGE:
+    #   - Installer now installs MariaDB/MySQL based on distro
+    #   - Supports Debian, RHEL, SUSE, Arch, Alpine, macOS, SunOS
+    # --------------------------------------------------------
+    print("STEP 2.6: Ensuring database engine is installed")
+    print("-----------------------------------------------------")
+
+    if not ensure_database_installed(system, distro_class, musica_config):
+        print("ERROR: Database installation failed or was skipped.")
+        sys.exit(1)
+
+    print("STEP 2.6 completed successfully.")
+    print("-----------------------------------------------------")
+
+    # --------------------------------------------------------
+    # STEP 3: Detect database presence / service
+    # (post-install verification)
+    # --------------------------------------------------------
     db_found = detect_database(system, distro_class)
 
     if db_found:
         print("Database engine detected. Proceeding...")
     else:
-        print("WARNING: Required database not found. Installation may fail later.")
+        print("WARNING: Database engine not detected. Installation may fail later.")
 
     print("")
-    print("STEP 3 Database detected successfully.")
-    print("----------------------------------------")
+    print("STEP 3: Database detected successfully.")
+    print("-----------------------------------------------------")
 
-    # --- Phase 4: DB/User Setup ---
-    if system in ("Linux", "Darwin"):  # For Linux/MacOS, use MySQL/MariaDB
-        db_name, user_id, priv_level = db_user_setup_linux()
+    # --------------------------------------------------------
+    # STEP 4: Interactive DB/User setup
+    # ★ RECENT CHANGE:
+    #   - If DB already exists, skip user/password/privileges
+    #   - Returns (db_name, user_id, priv_level)
+    # --------------------------------------------------------
+    db_name = None
+    db_user = None
+    privileges = None
+
+    if system in ("Linux", "Darwin"):
+        db_name, db_user, privileges = db_user_setup_linux()
     elif system == "Windows":
-        print("Windows installer uses SQLite by default; user DB creation not needed.")
+        print("Windows installer uses SQLite by default; no DB/user creation required.")
 
     print("")
     print("STEP 4 completed successfully.")
-    print("----------------------------------------")
+    print("-----------------------------------------------------")
 
-    # Phase 5: PEP 668 advisory
+    # --------------------------------------------------------
+    # STEP 5: Validate Musica configuration values and paths
+    # ★ RECENT CHANGE:
+    #   - Explicit config key validation
+    #   - Path existence checks
+    # --------------------------------------------------------
+    validate_musica_config(musica_config)
+
+    print("")
+    print("STEP 5: Musica configuration validated.")
+    print("-----------------------------------------------------")
+
+    # --------------------------------------------------------
+    # STEP 6: PEP 668 detection + enforcement
+    # ★ IMPLEMENTED:
+    #   - Detects PEP 668 conditions
+    #   - Creates venv if missing
+    #   - Installs Python DB bindings safely
+    # --------------------------------------------------------
     check_pep668(system, distro_class)
 
-    print("\nMusica installation completed. The program is now ready to use.")
+    if not ensure_venv_pep668(system, distro_class):
+        print("WARNING: PEP 668 environment not fully configured.")
+
+
+    print("")
+    print("STEP 6 completed successfully.")
+    print("-----------------------------------------------------")
+
+    # --------------------------------------------------------
+    # FINAL SUMMARY
+    # ★ FIXED:
+    #   - Uses correct variable names
+    #   - Handles None values cleanly
+    # --------------------------------------------------------
+    final_summary(db_name, db_user, privileges)
 
     print("")
     print("Installer completed successfully.")

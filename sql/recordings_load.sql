@@ -1,3 +1,5 @@
+-- recordings_load.sql — Load CSV data into staging table
+
 LOAD DATA LOCAL INFILE '/opt/Musica/data/imports/recordings_load.csv'
 INTO TABLE stg_recordings
 FIELDS TERMINATED BY ','

@@ -1,7 +1,4 @@
--- Musica Database Cleanup Script
--- Version: 1.1
--- Description:
---   Drops the 'musica' database and all its objects.
---   Use with caution — this will remove all data.
+-- Drop_Schema.sql — Drop Musica DB (use with caution)
 
-DROP DATABASE IF EXISTS musica;
+DROP DATABASE IF EXISTS Musica;
+

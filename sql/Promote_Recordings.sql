@@ -1,3 +1,4 @@
+-- Promote valid staging records into production
 INSERT IGNORE INTO recordings (
     artist,
     title,
@@ -29,4 +30,5 @@ SELECT
     UPPER(NULLIF(TRIM(dbx_encoded), ''))
 FROM stg_recordings
 WHERE is_valid = 1;
+
 

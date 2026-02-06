@@ -1,3 +1,5 @@
+-- promote_staging.sql — Promote valid staging rows to recordings
+
 INSERT INTO recordings (
     artist,
     title,
@@ -24,9 +26,9 @@ SELECT
     format,
     COALESCE(NULLIF(TRIM(label), ''), '---'),
     COALESCE(NULLIF(TRIM(catalog_number), ''), '---'),
-	UPPER(NULLIF(TRIM(recording_mode), '')) AS recording_mode,
-    UPPER(NULLIF(TRIM(reissue), ''))        AS reissue,
-    UPPER(NULLIF(TRIM(dbx_encoded), ''))    AS dbx_encoded
+    UPPER(NULLIF(TRIM(recording_mode), NULL)) AS recording_mode,
+    UPPER(NULLIF(TRIM(reissue), NULL))        AS reissue,
+    UPPER(NULLIF(TRIM(dbx_encoded), NULL))    AS dbx_encoded
 FROM stg_recordings
 WHERE is_valid = 1;
 

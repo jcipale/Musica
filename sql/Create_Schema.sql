@@ -1,48 +1,39 @@
--- Create_Schema.sql
--- Phase 2 schema — MariaDB 10.5+ enforced
+-- Create_Schema.sql — Production Table: recordings
+-- MariaDB 10.6+ / utf8mb4 / InnoDB
 
-CREATE TABLE recordings (
-    id                INT AUTO_INCREMENT PRIMARY KEY,
+CREATE DATABASE IF NOT EXISTS Musica
+    DEFAULT CHARACTER SET utf8mb4
+    DEFAULT COLLATE utf8mb4_unicode_ci;
 
-    artist            VARCHAR(255) NOT NULL,
-    title             VARCHAR(255) NOT NULL,
-    year              INT NOT NULL,
+USE Musica;
 
-    composer          VARCHAR(255),
-    orchestra         VARCHAR(255),
-    conductor         VARCHAR(255),
+CREATE TABLE IF NOT EXISTS recordings (
+    id               BIGINT AUTO_INCREMENT PRIMARY KEY,
 
-    genre             VARCHAR(50) NOT NULL,
-    format            VARCHAR(20) NOT NULL,
-    label             VARCHAR(100),
-    catalog_number    VARCHAR(50),
+    artist           VARCHAR(255) NOT NULL,
+    title            VARCHAR(255) NOT NULL,
+    year             INT NOT NULL CHECK (year >= 1900 AND year <= YEAR(CURDATE()) + 1),
 
-    recording_mode    CHAR(1),
-    reissue           CHAR(1),
-    dbx_encoded       CHAR(1),
+    composer         VARCHAR(255) DEFAULT '---',
+    orchestra        VARCHAR(255) DEFAULT '---',
+    conductor        VARCHAR(255) DEFAULT '---',
 
-    CONSTRAINT uq_artist_title_year
-        UNIQUE (artist, title, year),
+    genre            ENUM('Jazz','Rock','Country','Symphonic') NOT NULL,
+    format           ENUM('LP','CD','Cass','RtR','78','4T','8T') NOT NULL,
+    label            VARCHAR(100) DEFAULT '---',
+    catalog_number   VARCHAR(50) DEFAULT '---',
 
-    CONSTRAINT chk_year_lower_bound
-        CHECK (year >= 1900),
+    recording_mode   ENUM('M','S') DEFAULT NULL,
+    reissue          ENUM('Y','N') DEFAULT NULL,
+    dbx_encoded      ENUM('Y') DEFAULT NULL,
 
-    CONSTRAINT chk_genre
-        CHECK (genre IN ('Jazz','Rock','Country','Symphonic')),
+    -- Index for lookups; duplicates allowed
+    INDEX idx_artist_title_year (artist, title, year)
+) ENGINE=InnoDB
+  DEFAULT CHARSET=utf8mb4
+  COLLATE=utf8mb4_unicode_ci;
 
-    CONSTRAINT chk_format
-        CHECK (format IN ('LP','CD','Cass','RtR', '78', '4T', '8T')),
-
-	CONSTRAINT chk_recording_mode
-        CHECK (recording_mode IN ('M','S') OR recording_mode IS NULL),
-
-    CONSTRAINT chk_dbx
-        CHECK (dbx_encoded = 'Y' OR dbx_encoded IS NULL),
-
-    CONSTRAINT chk_reissue
-        CHECK (reissue IN ('Y','N') OR reissue IS NULL)
-);
-
+-- Trigger: prevent future-year entries
 DELIMITER //
 
 CREATE TRIGGER trg_recordings_year_ins
@@ -50,8 +41,7 @@ BEFORE INSERT ON recordings
 FOR EACH ROW
 BEGIN
     IF NEW.year > YEAR(CURDATE()) + 1 THEN
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'Invalid year: exceeds allowed range';
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid year: exceeds allowed range';
     END IF;
 END//
 
@@ -60,8 +50,7 @@ BEFORE UPDATE ON recordings
 FOR EACH ROW
 BEGIN
     IF NEW.year > YEAR(CURDATE()) + 1 THEN
-        SIGNAL SQLSTATE '45000'
-            SET MESSAGE_TEXT = 'Invalid year: exceeds allowed range';
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid year: exceeds allowed range';
     END IF;
 END//
 

@@ -1,14 +1,37 @@
 #!/opt/Musica/venv/bin/python
 
-import mariadb
-import getpass
+# ------------------------------------------------------------
+# musica_db_add_recording.py
+#
+# Interactive tool to add a recording to Musica
+#
+# Assumptions:
+#   - Musica venv exists (PEP 668)
+#   - Database already provisioned
+#   - User has INSERT privileges
+# ------------------------------------------------------------
+
 import sys
+import getpass
 from datetime import datetime
+from pathlib import Path
 
-# -----------------------------
+import MySQLdb
+
+# ------------------------------------------------------------
+# Safety
+# ------------------------------------------------------------
+def enforce_venv():
+    expected = Path("/opt/Musica/venv/bin/python")
+    if Path(sys.executable) != expected:
+        print("ERROR: This script must be run using the Musica venv.")
+        print(f"Expected: {expected}")
+        print(f"Running : {sys.executable}")
+        sys.exit(1)
+
+# ------------------------------------------------------------
 # Helpers
-# -----------------------------
-
+# ------------------------------------------------------------
 def prompt(label, required=True):
     val = input(label).strip()
     if required and not val:
@@ -16,16 +39,14 @@ def prompt(label, required=True):
         sys.exit(1)
     return val if val else None
 
-
 def normalize_flag(val):
     """
     Normalize single-character flags.
-    Empty input becomes NULL (stored as NULL in DB).
+    Empty input becomes NULL.
     """
     if not val or not val.strip():
         return None
     return val.strip().upper()[0]
-
 
 def normalize_text(val):
     """
@@ -36,12 +57,12 @@ def normalize_text(val):
         return None
     return val.strip()
 
-
-# -----------------------------
+# ------------------------------------------------------------
 # Main
-# -----------------------------
-
+# ------------------------------------------------------------
 def main():
+    enforce_venv()
+
     print("\nAdd New Recording to Musica")
     print("---------------------------")
 
@@ -52,13 +73,14 @@ def main():
 
     # ---- Connect ----
     try:
-        conn = mariadb.connect(
+        conn = MySQLdb.connect(
             user=db_user,
-            password=db_pass,
-            database=db_name,
-            host="localhost"
+            passwd=db_pass,
+            db=db_name,
+            host="localhost",
+            charset="utf8mb4"
         )
-    except mariadb.Error as e:
+    except MySQLdb.Error as e:
         print(f"\nConnection failed: {e}")
         sys.exit(1)
 
@@ -72,18 +94,21 @@ def main():
         print("Year must be numeric.")
         sys.exit(1)
 
-    this_year = datetime.now().year + 1
-    if year < 1900 or year > this_year:
+    max_year = datetime.now().year + 1
+    if year < 1900 or year > max_year:
         print("Year out of valid range.")
         sys.exit(1)
 
-    genre = prompt("Genre [Jazz | Rock | Country | Symphonic]: ").strip().capitalize()
-    fmt   = prompt("Format [LP | CD | Cass | RTR |78 | 4T | 8T ]: ").strip().upper()
+    genre = prompt(
+        "Genre [Jazz | Rock | Country | Symphonic]: "
+    ).strip().capitalize()
+
+    fmt = prompt(
+        "Format [LP | CD | Cass | RTR | 78 | 4T | 8T]: "
+    ).strip().upper()
 
     # ---- Genre-aware classical fields ----
-    composer  = None
-    orchestra = None
-    conductor = None
+    composer = orchestra = conductor = None
 
     if genre == "Symphonic":
         composer  = normalize_text(prompt("Composer: "))
@@ -114,7 +139,7 @@ def main():
             recording_mode,
             reissue,
             dbx_encoded
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
 
     # ---- Execute ----
@@ -138,13 +163,15 @@ def main():
         conn.commit()
         print("\nRecord inserted successfully.")
 
-    except mariadb.Error as e:
+    except MySQLdb.Error as e:
+        conn.rollback()
         print(f"\nInsert failed: {e}")
 
     finally:
+        cur.close()
         conn.close()
 
-
+# ------------------------------------------------------------
 if __name__ == "__main__":
     main()
 

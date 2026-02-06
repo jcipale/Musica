@@ -3,107 +3,80 @@
 """
 musica_db_query.py
 Execute an ad-hoc SQL query and print results.
-Translated from musica_db_query.csh
 """
 
-import os
 import sys
-import subprocess
+import getpass
 from pathlib import Path
+import MySQLdb
 
 
-def error(msg, code=1):
-    print(msg)
+def die(msg, code=1):
+    print(f"ERROR: {msg}")
     sys.exit(code)
 
 
-def load_config(path):
-    """
-    Load KEY=value pairs from musica.conf.
-    Values are treated literally and exported to os.environ.
-    """
+def load_config(path: Path):
     config = {}
-    with path.open("r") as f:
+    with path.open() as f:
         for line in f:
             line = line.strip()
-            if not line or line.startswith("#"):
+            if not line or line.startswith("#") or "=" not in line:
                 continue
-            if "=" not in line:
-                continue
-            key, val = line.split("=", 1)
-            key = key.strip()
-            val = val.strip().strip('"').strip("'")
-            config[key] = val
-            os.environ[key] = val
+            k, v = line.split("=", 1)
+            config[k.strip()] = v.strip().strip('"').strip("'")
     return config
 
 
+def connect_db(cfg):
+    user = cfg.get("MUSICA_DB_USER") or input("DB user: ").strip()
+    db   = cfg.get("MUSICA_DB_NAME") or input("Database: ").strip()
+    pwd  = cfg.get("MUSICA_DB_PASS") or getpass.getpass("Password: ")
+
+    try:
+        return MySQLdb.connect(
+            user=user,
+            passwd=pwd,
+            db=db,
+            host=cfg.get("MUSICA_DB_HOST", "localhost"),
+            charset="utf8mb4"
+        )
+    except MySQLdb.Error as e:
+        die(f"DB connection failed: {e}")
+
+
 def main():
-    # script_dir and base_dir
-    script_dir = Path(__file__).resolve().parent
-    base_dir = script_dir.parent
-
-    # load config
-    config_path = base_dir / "config" / "musica.conf"
-    if not config_path.is_file():
-        error(f"Error: config missing: {config_path}")
-
-    config = load_config(config_path)
-
-    # run environment verification
-    verify_script = base_dir / "bin" / "musica_verify_env.py"
-    if not verify_script.is_file():
-        error("Environment verification script not found.")
-
-    result = subprocess.run(
-        [sys.executable, str(verify_script)],
-        check=False
-    )
-    if result.returncode != 0:
-        error("Environment verification failed.")
-
-    # arguments
     if len(sys.argv) < 2:
         print(f'Usage: {sys.argv[0]} "SQL_QUERY"')
         sys.exit(1)
 
-    # join all args into one query string
     query = " ".join(sys.argv[1:])
 
-    db_type = config.get("MUSICA_DB_TYPE")
-    db_name = config.get("MUSICA_DB_NAME")
-    db_user = config.get("MUSICA_DB_USER", "")
-    db_pass = config.get("MUSICA_DB_PASS", "")
+    base_dir = Path(__file__).resolve().parent.parent
+    cfg_path = base_dir / "config" / "musica.conf"
 
-    if not db_type or not db_name:
-        error("Database configuration incomplete.")
+    if not cfg_path.is_file():
+        die(f"Missing config: {cfg_path}")
 
-    # build command
-    if db_pass == "":
-        # matches: sudo $MUSICA_DB_TYPE -D DB -e "query"
-        cmd = [
-            "sudo",
-            db_type,
-            "-D",
-            db_name,
-            "-e",
-            query,
-        ]
-    else:
-        # matches: mysql/mariadb -u user -ppass -D DB -e "query"
-        cmd = [
-            db_type,
-            "-u",
-            db_user,
-            f"-p{db_pass}",
-            "-D",
-            db_name,
-            "-e",
-            query,
-        ]
+    cfg = load_config(cfg_path)
+    conn = connect_db(cfg)
+    cur = conn.cursor()
 
-    result = subprocess.run(cmd)
-    sys.exit(result.returncode)
+    try:
+        cur.execute(query)
+        if cur.description:
+            cols = [d[0] for d in cur.description]
+            print("\t".join(cols))
+            for row in cur.fetchall():
+                print("\t".join("" if v is None else str(v) for v in row))
+        else:
+            conn.commit()
+            print(f"{cur.rowcount} rows affected.")
+    except MySQLdb.Error as e:
+        die(f"Query failed: {e}")
+    finally:
+        cur.close()
+        conn.close()
 
 
 if __name__ == "__main__":

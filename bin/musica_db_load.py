@@ -1,31 +1,28 @@
 #!/opt/Musica/venv/bin/python3
 # musica_db_load.py — Load CSV into stg_recordings
 
-from pathlib import Path
 import subprocess
+from pathlib import Path
 import sys
 
-# =========================
-# Config & defaults
-# =========================
-DB_NAME = "QA_Musica"  # Or prompt interactively
+DB_NAME = "QA_Musica"  # Could also prompt interactively
 CSV_DIR = Path("/opt/Musica/data/imports")
 
-# =========================
-# Helper
-# =========================
+
+def require_root():
+    import os
+    if os.geteuid() != 0:
+        print("ERROR: Must run as root (sudo).")
+        sys.exit(1)
+
+
 def load_csv(csv_file: Path, db_name: str):
     if not csv_file.is_file():
         print(f"ERROR: CSV file not found: {csv_file}")
         sys.exit(1)
 
     print(f"Loading CSV: {csv_file} → staging table")
-    cmd = [
-        "mysql",
-        "-u", "root",
-        "--local-infile=1",
-        db_name
-    ]
+    cmd = ["mysql", "-u", "root", "--local-infile=1", db_name]
     sql = f"""
     LOAD DATA LOCAL INFILE '{csv_file}'
     INTO TABLE stg_recordings
@@ -57,14 +54,9 @@ def load_csv(csv_file: Path, db_name: str):
 
     print("CSV loaded successfully.")
 
-# =========================
-# Main
-# =========================
-if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        csv_file = CSV_DIR / sys.argv[1]
-    else:
-        csv_file = CSV_DIR / "recordings_load.csv"
 
+if __name__ == "__main__":
+    require_root()
+    csv_file = CSV_DIR / (sys.argv[1] if len(sys.argv) > 1 else "recordings_load.csv")
     load_csv(csv_file, DB_NAME)
 

@@ -9,14 +9,9 @@
 #   - Load schema
 #   - Create user
 #   - Assign privileges
+#   - Load install-time SQL artifacts (views, staging, triggers)
+#   - Create ~/.my.cnf for Linux user
 #
-# Assumptions:
-#   - Installer already ran
-#   - MariaDB/MySQL already installed & running
-#   - Musica venv already exists (PEP 668)
-#   - musica.conf already exists
-#
-# This script is intentionally INTERACTIVE ONLY.
 # ------------------------------------------------------------
 
 from pathlib import Path
@@ -24,8 +19,19 @@ import subprocess
 import getpass
 import sys
 import os
+import pwd
 
+# ------------------------------------------------------------
+# Constants
+# ------------------------------------------------------------
 MUSICA_CONF = Path("/opt/Musica/config/musica.conf")
+
+INSTALL_SQL = [
+    "Audit_Recordings.sql",
+    "Create_Schema.sql",
+    "Create_Staging.sql",
+    "v_recordings_display.sql",
+]
 
 # ------------------------------------------------------------
 # Safety checks
@@ -62,16 +68,14 @@ def load_musica_config():
             k, v = line.split("=", 1)
             config[k.strip()] = v.strip()
 
-    required = ["MUSICA_SQL_DIR"]
-    for key in required:
-        if key not in config:
-            print(f"ERROR: Missing required config key: {key}")
-            sys.exit(1)
+    if "MUSICA_SQL_DIR" not in config:
+        print("ERROR: Missing required config key: MUSICA_SQL_DIR")
+        sys.exit(1)
 
     return config
 
 # ------------------------------------------------------------
-# DB helpers
+# MySQL helpers
 # ------------------------------------------------------------
 def mysql_exec(sql, database=None):
     cmd = ["mysql", "-u", "root"]
@@ -91,9 +95,11 @@ def mysql_exec(sql, database=None):
 
     return result.stdout
 
+
 def database_exists(db_name):
     out = mysql_exec(f"SHOW DATABASES LIKE '{db_name}';")
     return db_name in out
+
 
 def user_exists(user):
     out = mysql_exec(f"SELECT User FROM mysql.user WHERE User='{user}';")
@@ -109,7 +115,7 @@ def load_schema(db_name, sql_dir):
         print(f"ERROR: Schema file not found: {schema_file}")
         sys.exit(1)
 
-    print(f"Loading schema from {schema_file}")
+    print(f"Loading schema: {schema_file.name}")
 
     try:
         subprocess.run(
@@ -121,7 +127,70 @@ def load_schema(db_name, sql_dir):
         print("ERROR: Failed to load schema.")
         sys.exit(1)
 
-    print("Schema loaded successfully.")
+# ------------------------------------------------------------
+# Install-time SQL loader
+# ------------------------------------------------------------
+def load_install_sql(db_name, sql_dir):
+    for sql_file in INSTALL_SQL:
+        sql_path = Path(sql_dir) / sql_file
+
+        if not sql_path.is_file():
+            print(f"ERROR: Missing install SQL file: {sql_path}")
+            sys.exit(1)
+
+        print(f"Loading install SQL: {sql_file}")
+
+        try:
+            subprocess.run(
+                ["mysql", "-u", "root", db_name],
+                stdin=sql_path.open("r"),
+                check=True
+            )
+        except subprocess.CalledProcessError:
+            print(f"ERROR: Failed loading {sql_file}")
+            sys.exit(1)
+
+# ------------------------------------------------------------
+# .my.cnf Creator
+# ------------------------------------------------------------
+# Create ~/.my.cnf for invoking OS user
+# ------------------------------------------------------------
+def create_my_cnf(db_name, db_user, db_password):
+    sudo_user = os.environ.get("SUDO_USER")
+
+    if not sudo_user:
+        print("ERROR: Cannot determine invoking user (run via sudo).")
+        sys.exit(1)
+
+    user_home = Path("/home") / sudo_user
+    cnf_path = user_home / ".my.cnf"
+
+    print(f"Creating MySQL client config: {cnf_path}")
+
+    content = f"""[client]
+user={db_user}
+password={db_password}
+host=localhost
+database={db_name}
+"""
+
+    try:
+        with cnf_path.open("w") as f:
+            f.write(content)
+
+        # Correct ownership
+        import pwd
+        user_info = pwd.getpwnam(sudo_user)
+        os.chown(cnf_path, user_info.pw_uid, user_info.pw_gid)
+
+        # Secure permissions
+        os.chmod(cnf_path, 0o600)
+
+    except Exception as e:
+        print(f"ERROR: Failed to create .my.cnf: {e}")
+        sys.exit(1)
+
+    print(".my.cnf created successfully.")
 
 # ------------------------------------------------------------
 # Interactive provisioning
@@ -131,7 +200,6 @@ def provision_database(config):
     print("Musica Database Provisioning")
     print("-------------------------------------------------------------")
 
-    # Database name
     while True:
         db_name = input("Enter database name to provision: ").strip()
         if db_name:
@@ -147,10 +215,9 @@ def provision_database(config):
         mysql_exec(f"CREATE DATABASE `{db_name}`;")
         load_schema(db_name, config["MUSICA_SQL_DIR"])
 
-    # User creation
     resp = input("Create or update a database user? [y/N]: ").strip().lower()
     if resp != "y":
-        return db_name, None, None
+        return db_name, None, None, None
 
     while True:
         user = input("Enter username: ").strip()
@@ -165,14 +232,15 @@ def provision_database(config):
         sys.exit(1)
 
     if user_exists(user):
-        print(f"User '{user}' already exists.")
-        mysql_exec(f"ALTER USER '{user}'@'localhost' IDENTIFIED BY '{password}';")
+        print(f"User '{user}' already exists. Updating password.")
+        mysql_exec(
+            f"ALTER USER '{user}'@'localhost' IDENTIFIED BY '{password}';"
+        )
     else:
         mysql_exec(
             f"CREATE USER '{user}'@'localhost' IDENTIFIED BY '{password}';"
         )
 
-    # Privileges
     print("")
     print("Select privilege level:")
     print("  1) DBA")
@@ -180,39 +248,29 @@ def provision_database(config):
     print("  3) READ-ONLY")
 
     priv_map = {
-        "1": "DBA",
-        "2": "USER",
-        "3": "READ-ONLY"
+        "1": "ALL PRIVILEGES",
+        "2": "SELECT, INSERT, UPDATE, DELETE",
+        "3": "SELECT"
     }
 
     while True:
         choice = input("Enter choice [1-3]: ").strip()
         if choice in priv_map:
-            priv_level = priv_map[choice]
+            grant = priv_map[choice]
             break
 
     mysql_exec(f"REVOKE ALL PRIVILEGES, GRANT OPTION FROM '{user}'@'localhost';")
-
-    if priv_level == "DBA":
-        grant = "ALL PRIVILEGES"
-    elif priv_level == "USER":
-        grant = "SELECT, INSERT, UPDATE, DELETE"
-    else:
-        grant = "SELECT"
-
-    mysql_exec(
-        f"GRANT {grant} ON `{db_name}`.* TO '{user}'@'localhost';"
-    )
+    mysql_exec(f"GRANT {grant} ON `{db_name}`.* TO '{user}'@'localhost';")
     mysql_exec("FLUSH PRIVILEGES;")
 
     print("")
     print("Provisioning complete.")
     print(f"Database   : {db_name}")
     print(f"User       : {user}")
-    print(f"Privileges : {priv_level}")
+    print(f"Privileges : {grant}")
     print("-------------------------------------------------------------")
 
-    return db_name, user, priv_level
+    return db_name, user, password, grant
 
 # ------------------------------------------------------------
 # Main
@@ -222,8 +280,17 @@ def main():
     require_venv()
 
     config = load_musica_config()
-    provision_database(config)
 
+    db_name, user, password, priv = provision_database(config)
+
+    load_install_sql(db_name, config["MUSICA_SQL_DIR"])
+
+    if user:
+        create_my_cnf(db_name, user, password)
+
+    print("Database provisioned successfully.")
+
+# ------------------------------------------------------------
 if __name__ == "__main__":
     main()
 

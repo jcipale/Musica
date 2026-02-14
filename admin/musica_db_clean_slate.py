@@ -1,21 +1,38 @@
-#!/usr/bin/env python3
+#!/opt/Musica/venv/bin/python
 
 """
 Clean_Slate Protocol for Musica
 --------------------------------
 Completely wipes a selected Musica database and optionally
 associated users, leaving all other databases intact.
+
+This script intentionally replaces any DROP DATABASE SQL.
+Destructive operations must be interactive and explicit.
+
 """
 
 import subprocess
 import sys
-import getpass
+import os
+from pathlib import Path
 
+# ------------------------------------------------------------
+# Safety
+# ------------------------------------------------------------
 def require_root():
-    if not getpass.getuser() == "root":
-        print("ERROR: This script should be run as root or with sudo.")
+    if os.geteuid() != 0:
+        print("ERROR: This script must be run as root (sudo).")
         sys.exit(1)
 
+def enforce_venv():
+    expected = Path("/opt/Musica/venv/bin/python")
+    if Path(sys.executable) != expected:
+        print("ERROR: This script must be run using the Musica venv.")
+        sys.exit(1)
+
+# ------------------------------------------------------------
+# Helpers
+# ------------------------------------------------------------
 def prompt_database_name():
     while True:
         db_name = input("Enter the database to completely wipe: ").strip()
@@ -25,72 +42,58 @@ def prompt_database_name():
 
 def confirm_action(db_name):
     print(f"\nWARNING: This will completely DESTROY database '{db_name}'!")
-    resp = input("Are you ABSOLUTELY sure? [type 'YES' to proceed]: ").strip()
+    resp = input("Type 'YES' to proceed: ").strip()
     if resp != "YES":
         print("Aborting clean-slate operation.")
         sys.exit(0)
 
+def mysql_exec(sql):
+    result = subprocess.run(
+        ["mysql", "-u", "root", "-e", sql],
+        capture_output=True,
+        text=True
+    )
+    if result.returncode != 0:
+        print("MySQL ERROR:")
+        print(result.stderr.strip())
+        sys.exit(1)
+    return result.stdout
+
 def get_users_for_db(db_name):
-    """
-    Returns a list of MySQL users with privileges on the given DB.
-    """
-    try:
-        result = subprocess.run(
-            ["mysql", "-u", "root", "-e",
-             f"SELECT DISTINCT user, host FROM mysql.db WHERE Db='{db_name}';"],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        lines = result.stdout.strip().splitlines()
-        # Skip header line
-        users = [line.split() for line in lines[1:]]
-        return users  # list of [user, host]
-    except subprocess.CalledProcessError:
-        print("ERROR: Unable to query users for database.")
-        return []
+    out = mysql_exec(
+        f"SELECT DISTINCT User, Host FROM mysql.db WHERE Db='{db_name}';"
+    )
+    users = []
+    for line in out.splitlines()[1:]:
+        user, host = line.split()
+        users.append((user, host))
+    return users
 
-def drop_database(db_name):
-    try:
-        subprocess.run(
-            ["mysql", "-u", "root", "-e", f"DROP DATABASE IF EXISTS `{db_name}`;"],
-            check=True
-        )
-        print(f"Database '{db_name}' dropped successfully.")
-    except subprocess.CalledProcessError:
-        print(f"ERROR: Failed to drop database '{db_name}'.")
-
+# ------------------------------------------------------------
+# Destruction
+# ------------------------------------------------------------
 def drop_users(users):
     for user, host in users:
-        try:
-            subprocess.run(
-                ["mysql", "-u", "root", "-e",
-                 f"DROP USER IF EXISTS '{user}'@'{host}';"],
-                check=True
-            )
-            print(f"Dropped user '{user}'@'{host}'")
-        except subprocess.CalledProcessError:
-            print(f"ERROR: Failed to drop user '{user}'@'{host}'.")
+        mysql_exec(f"DROP USER IF EXISTS '{user}'@'{host}';")
+        print(f"Dropped user '{user}'@'{host}'")
 
-def flush_privileges():
-    try:
-        subprocess.run(
-            ["mysql", "-u", "root", "-e", "FLUSH PRIVILEGES;"],
-            check=True
-        )
-        print("Privileges flushed successfully.")
-    except subprocess.CalledProcessError:
-        print("ERROR: Failed to flush privileges.")
+def drop_database(db_name):
+    mysql_exec(f"DROP DATABASE IF EXISTS `{db_name}`;")
+    print(f"Database '{db_name}' dropped.")
 
+# ------------------------------------------------------------
+# Main
+# ------------------------------------------------------------
 def main():
     require_root()
+    enforce_venv()
+
     db_name = prompt_database_name()
     confirm_action(db_name)
 
-    # --- Identify associated users ---
     users = get_users_for_db(db_name)
     if users:
-        print("\nThe following users have privileges on this database:")
+        print("\nUsers with privileges on this DB:")
         for u, h in users:
             print(f"  - {u}@{h}")
 
@@ -100,11 +103,8 @@ def main():
         else:
             print("Users retained.")
 
-    # --- Drop the database ---
     drop_database(db_name)
-
-    # --- Flush privileges ---
-    flush_privileges()
+    mysql_exec("FLUSH PRIVILEGES;")
 
     print("\nClean-slate operation completed successfully.")
 

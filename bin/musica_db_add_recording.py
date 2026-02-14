@@ -4,19 +4,17 @@
 # musica_db_add_recording.py
 #
 # Interactive tool to add a recording to Musica
-#
-# Assumptions:
-#   - Musica venv exists (PEP 668)
-#   - Database already provisioned
-#   - User has INSERT privileges
+# Authentication and database selection via ~/.my.cnf
 # ------------------------------------------------------------
 
 import sys
-import getpass
+import os
+import stat
+import configparser
 from datetime import datetime
 from pathlib import Path
-
 import MySQLdb
+
 
 # ------------------------------------------------------------
 # Safety
@@ -25,9 +23,37 @@ def enforce_venv():
     expected = Path("/opt/Musica/venv/bin/python")
     if Path(sys.executable) != expected:
         print("ERROR: This script must be run using the Musica venv.")
-        print(f"Expected: {expected}")
-        print(f"Running : {sys.executable}")
         sys.exit(1)
+
+
+def load_and_validate_my_cnf():
+    cnf_path = Path.home() / ".my.cnf"
+
+    if not cnf_path.is_file():
+        print(f"ERROR: Missing .my.cnf at {cnf_path}")
+        sys.exit(1)
+
+    # Enforce 600 permissions
+    st = os.stat(cnf_path)
+    if st.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
+        print("ERROR: .my.cnf must have permissions 600.")
+        sys.exit(1)
+
+    config = configparser.ConfigParser()
+    config.read(cnf_path)
+
+    if "client" not in config:
+        print("ERROR: .my.cnf missing [client] section.")
+        sys.exit(1)
+
+    required = ["user", "password", "host", "database"]
+    for key in required:
+        if key not in config["client"]:
+            print(f"ERROR: .my.cnf missing required key: {key}")
+            sys.exit(1)
+
+    return cnf_path
+
 
 # ------------------------------------------------------------
 # Helpers
@@ -39,50 +65,38 @@ def prompt(label, required=True):
         sys.exit(1)
     return val if val else None
 
+
 def normalize_flag(val):
-    """
-    Normalize single-character flags.
-    Empty input becomes NULL.
-    """
     if not val or not val.strip():
         return None
     return val.strip().upper()[0]
 
+
 def normalize_text(val):
-    """
-    Normalize optional text fields.
-    Empty -> NULL
-    """
     if not val or not val.strip():
         return None
     return val.strip()
+
 
 # ------------------------------------------------------------
 # Main
 # ------------------------------------------------------------
 def main():
     enforce_venv()
+    cnf_path = load_and_validate_my_cnf()
 
-    print("\nAdd New Recording to Musica")
-    print("---------------------------")
-
-    # ---- DB Credentials ----
-    db_user = prompt("DB User: ")
-    db_name = prompt("Database: ")
-    db_pass = getpass.getpass("Password: ")
-
-    # ---- Connect ----
+    # ---- Connect using ~/.my.cnf ----
     try:
         conn = MySQLdb.connect(
-            user=db_user,
-            passwd=db_pass,
-            db=db_name,
-            host="localhost",
+            read_default_file=str(cnf_path),
             charset="utf8mb4"
         )
     except MySQLdb.Error as e:
         print(f"\nConnection failed: {e}")
         sys.exit(1)
+
+    print("\nAdd New Recording to Musica")
+    print("---------------------------")
 
     # ---- Core fields ----
     artist = prompt("Artist: ")
@@ -107,7 +121,6 @@ def main():
         "Format [LP | CD | Cass | RTR | 78 | 4T | 8T]: "
     ).strip().upper()
 
-    # ---- Genre-aware classical fields ----
     composer = orchestra = conductor = None
 
     if genre == "Symphonic":
@@ -115,15 +128,12 @@ def main():
         orchestra = normalize_text(prompt("Orchestra: "))
         conductor = normalize_text(prompt("Conductor: "))
 
-    # ---- Optional metadata ----
     label   = normalize_text(prompt("Label (optional): ", False))
     catalog = normalize_text(prompt("Catalog Number (optional): ", False))
-
     mode    = normalize_flag(prompt("Recording Mode [M/S] (optional): ", False))
     reissue = normalize_flag(prompt("Reissue? [Y/N] (optional): ", False))
     dbx     = normalize_flag(prompt("dbx Encoded? [Y = yes, Enter = no]: ", False))
 
-    # ---- SQL ----
     sql = """
         INSERT INTO recordings (
             artist,
@@ -142,7 +152,6 @@ def main():
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
 
-    # ---- Execute ----
     try:
         cur = conn.cursor()
         cur.execute(sql, (
@@ -166,10 +175,12 @@ def main():
     except MySQLdb.Error as e:
         conn.rollback()
         print(f"\nInsert failed: {e}")
+        sys.exit(1)
 
     finally:
         cur.close()
         conn.close()
+
 
 # ------------------------------------------------------------
 if __name__ == "__main__":

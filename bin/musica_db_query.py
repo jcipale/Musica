@@ -1,84 +1,92 @@
 #!/opt/Musica/venv/bin/python
+# musica_db_promote.py — Promote valid staging rows to recordings
 
-"""
-musica_db_query.py
-Execute an ad-hoc SQL query and print results.
-"""
-
+import subprocess
 import sys
-import getpass
 from pathlib import Path
-import MySQLdb
 
 
-def die(msg, code=1):
+PROMOTE_SQL = """
+INSERT INTO recordings (
+    artist,
+    title,
+    year,
+    composer,
+    orchestra,
+    conductor,
+    genre,
+    format,
+    label,
+    catalog_number,
+    recording_mode,
+    reissue,
+    dbx_encoded
+)
+SELECT
+    artist,
+    title,
+    year,
+    COALESCE(NULLIF(TRIM(composer), ''), '---'),
+    COALESCE(NULLIF(TRIM(orchestra), ''), '---'),
+    COALESCE(NULLIF(TRIM(conductor), ''), '---'),
+    genre,
+    format,
+    COALESCE(NULLIF(TRIM(label), ''), '---'),
+    COALESCE(NULLIF(TRIM(catalog_number), ''), '---'),
+    UPPER(NULLIF(TRIM(recording_mode), '')),
+    UPPER(NULLIF(TRIM(reissue), '')),
+    UPPER(NULLIF(TRIM(dbx_encoded), ''))
+FROM stg_recordings
+WHERE is_valid = 1;
+"""
+
+
+def die(msg):
     print(f"ERROR: {msg}")
-    sys.exit(code)
+    sys.exit(1)
 
 
-def load_config(path: Path):
-    config = {}
-    with path.open() as f:
+def validate_my_cnf(expected_db: str):
+    cnf_path = Path.home() / ".my.cnf"
+
+    if not cnf_path.is_file():
+        die(f"Missing .my.cnf at {cnf_path}")
+
+    # Optional metadata check
+    db_name = None
+    with cnf_path.open() as f:
         for line in f:
             line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            k, v = line.split("=", 1)
-            config[k.strip()] = v.strip().strip('"').strip("'")
-    return config
+            if line.startswith("db="):
+                db_name = line.split("=", 1)[1].strip()
+
+    if expected_db and db_name and db_name != expected_db:
+        die(f".my.cnf DB mismatch (expected {expected_db}, found {db_name})")
 
 
-def connect_db(cfg):
-    user = cfg.get("MUSICA_DB_USER") or input("DB user: ").strip()
-    db   = cfg.get("MUSICA_DB_NAME") or input("Database: ").strip()
-    pwd  = cfg.get("MUSICA_DB_PASS") or getpass.getpass("Password: ")
-
+def promote():
     try:
-        return MySQLdb.connect(
-            user=user,
-            passwd=pwd,
-            db=db,
-            host=cfg.get("MUSICA_DB_HOST", "localhost"),
-            charset="utf8mb4"
+        subprocess.run(
+            ["mysql"],
+            input=PROMOTE_SQL,
+            text=True,
+            check=True
         )
-    except MySQLdb.Error as e:
-        die(f"DB connection failed: {e}")
+    except subprocess.CalledProcessError as e:
+        die("Failed to promote staging rows")
 
-
-def main():
-    if len(sys.argv) < 2:
-        print(f'Usage: {sys.argv[0]} "SQL_QUERY"')
-        sys.exit(1)
-
-    query = " ".join(sys.argv[1:])
-
-    base_dir = Path(__file__).resolve().parent.parent
-    cfg_path = base_dir / "config" / "musica.conf"
-
-    if not cfg_path.is_file():
-        die(f"Missing config: {cfg_path}")
-
-    cfg = load_config(cfg_path)
-    conn = connect_db(cfg)
-    cur = conn.cursor()
-
-    try:
-        cur.execute(query)
-        if cur.description:
-            cols = [d[0] for d in cur.description]
-            print("\t".join(cols))
-            for row in cur.fetchall():
-                print("\t".join("" if v is None else str(v) for v in row))
-        else:
-            conn.commit()
-            print(f"{cur.rowcount} rows affected.")
-    except MySQLdb.Error as e:
-        die(f"Query failed: {e}")
-    finally:
-        cur.close()
-        conn.close()
+    print("Staging rows promoted successfully.")
 
 
 if __name__ == "__main__":
-    main()
+    db_arg = None
+    if len(sys.argv) > 1:
+        if sys.argv[1] == "--db" and len(sys.argv) == 3:
+            db_arg = sys.argv[2]
+        else:
+            print("Usage: musica_db_promote.py [--db DATABASE]")
+            sys.exit(1)
+
+    validate_my_cnf(db_arg)
+    promote()
 

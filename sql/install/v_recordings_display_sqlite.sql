@@ -1,6 +1,9 @@
--- v_recordings_display.sql — Read-only view for display
+-- v_recordings_display_sqlite.sql — Read-only view for display
+-- SQLite 3.x
 
-CREATE OR REPLACE VIEW v_recordings_display AS
+DROP VIEW IF EXISTS v_recordings_display;
+
+CREATE VIEW v_recordings_display AS
 SELECT
     artist,
     title,

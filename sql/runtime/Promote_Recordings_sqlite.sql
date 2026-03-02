@@ -1,5 +1,7 @@
--- Promote valid staging records into production
-INSERT IGNORE INTO recordings (
+-- Promote_Recordings_sqlite.sql
+-- Promote valid staging records into production (SQLite)
+
+INSERT OR IGNORE INTO recordings (
     artist,
     title,
     year,
@@ -30,5 +32,4 @@ SELECT
     UPPER(NULLIF(TRIM(dbx_encoded), ''))
 FROM stg_recordings
 WHERE is_valid = 1;
-
 

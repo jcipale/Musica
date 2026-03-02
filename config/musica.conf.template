@@ -1,0 +1,52 @@
+# ======================================================================
+# Musica Configuration (Template)
+# Purpose : Neutral template used by musica_db_install.py to generate
+#           the real musica.conf for the current user/platform.
+# Format  : Python-friendly KEY=VALUE pairs (not shell-specific)
+# ======================================================================
+
+# ----------------------------------------------------------------------
+# BASE DIRECTORY (installer replaces __MUSICA_BASE_DIR__)
+# ----------------------------------------------------------------------
+MUSICA_BASE_DIR=__MUSICA_BASE_DIR__
+
+# ----------------------------------------------------------------------
+# CORE DIRECTORY STRUCTURE
+# ----------------------------------------------------------------------
+MUSICA_BIN_DIR=${MUSICA_BASE_DIR}/bin
+MUSICA_CONFIG_DIR=${MUSICA_BASE_DIR}/config
+MUSICA_DOCS_DIR=${MUSICA_BASE_DIR}/docs
+MUSICA_SQL_DIR=${MUSICA_BASE_DIR}/sql
+MUSICA_TOOLS_DIR=${MUSICA_BASE_DIR}/tools
+
+# ----------------------------------------------------------------------
+# DATA DIRECTORIES
+# ----------------------------------------------------------------------
+MUSICA_DATA_DIR=${MUSICA_BASE_DIR}/data
+MUSICA_IMPORT_DIR=${MUSICA_DATA_DIR}/imports
+MUSICA_EXPORT_DIR=${MUSICA_DATA_DIR}/exports
+
+# ----------------------------------------------------------------------
+# LOGGING
+# ----------------------------------------------------------------------
+MUSICA_LOG_DIR=${MUSICA_BASE_DIR}/logs
+MUSICA_LOG_FILE=${MUSICA_LOG_DIR}/musica.log
+
+# ----------------------------------------------------------------------
+# DATABASE SETTINGS (SQLite)
+# ----------------------------------------------------------------------
+MUSICA_DB_TYPE=sqlite
+MUSICA_DB_FILE=${MUSICA_DATA_DIR}/musica.db
+
+# ----------------------------------------------------------------------
+# DEFAULT IMPORT/EXPORT FILENAMES
+# ----------------------------------------------------------------------
+MUSICA_DEFAULT_IMPORT=musica_import.csv
+MUSICA_DEFAULT_EXPORT=musica_export.csv
+
+# ----------------------------------------------------------------------
+# BEHAVIOR FLAGS
+# ----------------------------------------------------------------------
+MUSICA_DEBUG=0
+MUSICA_ARCHIVE_IMPORT=1
+

@@ -1,6 +1,6 @@
--- promote_staging.sql — Promote valid staging rows to recordings
+-- promote_staging_sqlite.sql — Promote valid staging rows to recordings (SQLite)
 
-INSERT IGNORE INTO recordings (
+INSERT INTO recordings (
     artist,
     title,
     year,
@@ -19,13 +19,13 @@ SELECT
     artist,
     title,
     year,
-    COALESCE(NULLIF(TRIM(composer), ''), NULL),
-    COALESCE(NULLIF(TRIM(orchestra), ''), NULL),
-    COALESCE(NULLIF(TRIM(conductor), ''), NULL),
+    NULLIF(TRIM(composer), ''),
+    NULLIF(TRIM(orchestra), ''),
+    NULLIF(TRIM(conductor), ''),
     genre,
     format,
-    COALESCE(NULLIF(TRIM(label), ''), NULL),
-    COALESCE(NULLIF(TRIM(catalog_number), ''), NULL),
+    NULLIF(TRIM(label), ''),
+    NULLIF(TRIM(catalog_number), ''),
     UPPER(NULLIF(TRIM(recording_mode), '')) AS recording_mode,
     UPPER(NULLIF(TRIM(reissue), ''))        AS reissue,
     UPPER(NULLIF(TRIM(dbx_encoded), ''))    AS dbx_encoded

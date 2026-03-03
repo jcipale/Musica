@@ -13,7 +13,7 @@ import sqlite3
 MUSICA_BASE_DIR = Path.home() / "Musica"
 MUSICA_CONFIG_DIR = MUSICA_BASE_DIR / "config"
 MUSICA_DATA_DIR = MUSICA_BASE_DIR / "data"
-MUSICA_LOG_DIR = MUSICA_BASE_DIR / "logs"
+# MUSICA_LOG_DIR = MUSICA_BASE_DIR / "logs"
 
 # Contract: DB file lives at ~/Musica/musica.db
 MUSICA_DB_FILE = MUSICA_BASE_DIR / "musica.db"
@@ -45,7 +45,7 @@ def verify_existing_layout():
         ("MUSICA_BASE_DIR", MUSICA_BASE_DIR),
         ("MUSICA_CONFIG_DIR", MUSICA_CONFIG_DIR),
         ("MUSICA_DATA_DIR", MUSICA_DATA_DIR),
-        ("MUSICA_LOG_DIR", MUSICA_LOG_DIR),
+        # ("MUSICA_LOG_DIR", MUSICA_LOG_DIR),
     ]
 
     for name, path in required:
@@ -137,7 +137,8 @@ def final_summary():
     print(f"Base dir : {MUSICA_BASE_DIR}")
     print(f"Config   : {MUSICA_CONF_PATH}")
     print(f"DB file  : {MUSICA_DB_FILE}")
-    print("NOTE: Existing config/data/logs were not modified.")
+    # print("NOTE: Existing config/data/logs were not modified.")
+    print("NOTE: Existing config/data were not modified.")
     print("-------------------------------------------------------------")
 
 

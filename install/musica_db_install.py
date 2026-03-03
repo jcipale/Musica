@@ -13,7 +13,6 @@ import sqlite3
 MUSICA_BASE_DIR = Path.home() / "Musica"
 MUSICA_CONFIG_DIR = MUSICA_BASE_DIR / "config"
 MUSICA_DATA_DIR = MUSICA_BASE_DIR / "data"
-# MUSICA_LOG_DIR = MUSICA_BASE_DIR / "logs"
 
 # Contract: DB file lives at ~/Musica/musica.db
 MUSICA_DB_FILE = MUSICA_BASE_DIR / "musica.db"
@@ -45,7 +44,6 @@ def verify_existing_layout():
         ("MUSICA_BASE_DIR", MUSICA_BASE_DIR),
         ("MUSICA_CONFIG_DIR", MUSICA_CONFIG_DIR),
         ("MUSICA_DATA_DIR", MUSICA_DATA_DIR),
-        # ("MUSICA_LOG_DIR", MUSICA_LOG_DIR),
     ]
 
     for name, path in required:
